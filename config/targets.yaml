@@ -1,0 +1,42 @@
+# One entry per site you want to scrape. Add as many as you need —
+# run_full_crawl() fans every entry here out as its own Celery task.
+#
+# `fields` maps output_key -> css_selector. Append '::attr(name)' to a
+# selector to pull an HTML attribute instead of text content.
+
+targets:
+  - name: tofler
+    base_url: "https://www.tofler.in"
+    start_urls:
+      - "https://www.tofler.in/companylist/delhi/"
+    list_item_selector: "table tr:has(td)"
+    fields:
+      company_name: "td:nth-child(1) a"
+      company_link: "td:nth-child(1) a::attr(href)"
+      incorporation_year: "td:nth-child(2)"
+      industry: "td:nth-child(3)"
+      status: "td:nth-child(4)"
+    company_wait_for_selector: "#registered-details-module"
+    company_fields:
+      company_name: "#overview-module h1"
+      cin: "#registered-details-module .registered_box_wrapper .flex-col.gap-2:nth-child(1) span.text-base.text-dark.font-semibold"
+      status: "#overview-module .circular_point + .success"
+      registered_address: "REGISTERED_ADDRESS"
+      authorized_capital: "#registered-details-module .registered_box_wrapper .flex-col.gap-2:nth-child(5) span.text-base.text-dark.font-semibold"
+      paid_up_capital: "#registered-details-module .registered_box_wrapper .flex-col.gap-2:nth-child(4) span.text-base.text-dark.font-semibold"
+      industry: ".company_tag_item"
+      email: "#registered-details-module .registered_box_wrapper .flex-col.gap-2:nth-child(3) span.text-base.text-dark.font-semibold"
+      directors: "DIRECTORS_TABLE"
+    pagination:
+      type: "url_pattern"
+      url_pattern: "{base_url}/companylist/delhi/pg-{page}"
+      max_pages: 3
+    wait_for_selector: "table tr:has(td)"
+    rate_limit_seconds: 3
+
+  # - name: another_site
+  #   start_urls:
+  #     - "https://another-site.com/search"
+  #   list_item_selector: "..."
+  #   fields:
+  #     ...

@@ -1,0 +1,10 @@
+# Alternative to Celery Beat, for a bare VM without Docker.
+# Install with: crontab scripts/crontab.txt
+# (Prefer the Celery Beat + docker-compose setup for anything you're
+# scaling across multiple workers — this is the simple single-box option.)
+
+# Full crawl every hour, on the hour
+0 * * * * cd /opt/scraper && /opt/scraper/venv/bin/python scripts/run_once.py example_site >> logs/cron.log 2>&1
+
+# Roll the day's JSONL into CSV at 23:55
+55 23 * * * cd /opt/scraper && /opt/scraper/venv/bin/python -c "from scraper.pipeline import pipeline; pipeline.consolidate_to_csv()" >> logs/cron.log 2>&1

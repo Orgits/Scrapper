@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  worker:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - redis
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    deploy:
+      replicas: 3               # scale horizontally for heavy workload
+    command: celery -A workers.celery_worker worker --loglevel=info --concurrency=5
+
+  beat:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - redis
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    command: celery -A workers.celery_worker beat --loglevel=info
+
+  flower:                        # web dashboard: task status, throughput, failures
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - redis
+    env_file: .env
+    ports:
+      - "5555:5555"
+    command: celery -A workers.celery_worker flower --port=5555
+
+volumes:
+  redis_data:
