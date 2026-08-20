@@ -1,162 +1,393 @@
-# Web Scraper System
+# Web Scraper System - Production Ready
 
-Heavy-workload, 24x7 web scraper: rotating-proxy stealth browser automation,
-config-driven per-site parsing, JSON + CSV output, horizontally scalable via
-Celery workers, deployable as containers on any cloud.
+A production-ready web scraping system for company data enrichment from tofler.in, with priority-based CSV processing, checkpoint/resume capability, and robust error handling.
 
-## Why Playwright instead of Puppeteer
+## Features
 
-Puppeteer is JS-only. **Playwright** is its direct Python equivalent (built
-by the same original team) — same headless-Chromium automation model,
-network interception, proxy-per-context support — so you get Puppeteer-style
-control without leaving Python. `playwright-stealth` patches the common
-automation fingerprints (`navigator.webdriver`, missing plugins, etc.).
+- **Priority-based CSV processing** - Process high-priority files first (configurable)
+- **Checkpoint/resume** - Automatic resume from last processed row after crashes/restarts
+- **Graceful shutdown** - Handles SIGTERM/SIGINT, finishes current row before exiting
+- **Structured JSON logging** - Machine-parseable logs with context
+- **Proxy management** - Automatic rotation, health checks, failure categorization
+- **Atomic writes** - Crash-safe JSONL/CSV output with temp-file rename
+- **Docker production ready** - Multi-stage build, health checks, persistent volumes
+- **Celery integration** - Distributed task queue with Redis backend
 
-## Architecture
+## Quick Start
 
-```
-                        ┌─────────────────┐
-                        │   Celery Beat    │  fires run_full_crawl()
-                        │  (scheduler)     │  every hour, 24x7
-                        └────────┬─────────┘
-                                 │ pushes tasks
-                                 ▼
-                        ┌─────────────────┐
-                        │  Redis (broker + │
-                        │  dedup set)      │
-                        └────────┬─────────┘
-                                 │ tasks pulled
-              ┌──────────────────┼──────────────────┐
-              ▼                  ▼                  ▼
-        ┌──────────┐       ┌──────────┐       ┌──────────┐
-        │ Worker 1 │       │ Worker 2 │       │ Worker 3 │   (scale replicas
-        │          │       │          │       │          │    for heavier load)
-        │ Browser  │       │ Browser  │       │ Browser  │
-        │ (Chromium│       │ (Chromium│       │ (Chromium│
-        │ + stealth│       │ + stealth│       │ + stealth│
-        │ + proxy) │       │ + proxy) │       │ + proxy) │
-        └────┬─────┘       └────┬─────┘       └────┬─────┘
-             │                  │                  │
-             └──────────────────┼──────────────────┘
-                                 ▼
-                        ┌─────────────────┐
-                        │  DataPipeline    │
-                        │  JSONL (instant, │
-                        │  crash-safe) →   │
-                        │  CSV (rolled up) │
-                        └─────────────────┘
+### Local Development
+
+```bash
+# 1. Clone and enter directory
+cd web_scraper_system
+
+# 2. Copy environment template
+cp .env.example .env
+
+# 3. Edit .env with your settings (especially proxy list)
+vim .env
+
+# 4. Build and run with Docker Compose
+docker-compose -f docker-compose.yml -f docker-compose.override.yml up --build
 ```
 
-Each worker requests its own proxy + fingerprint per task from
-`ProxyManager` / `BrowserManager`, so concurrent scrapes exit through
-different IPs and never share cookies.
+### Production Deployment
 
-## Project layout
+```bash
+# 1. Copy environment template
+cp .env.example .env
+
+# 2. Configure .env for production:
+#    - REDIS_URL=redis://localhost:6379/0
+#    - PROXY_LIST_PATH=proxyscrape_premium_http_proxies.txt
+#    - PRIORITY_CSV_FILES=delhi,ROC-ANDHRA
+#    - LOG_LEVEL=INFO
+#    - LOG_FORMAT=json
+
+# 3. Build and start all services
+docker-compose up -d --build
+
+# 4. Verify services are healthy
+docker-compose ps
+# All services should show "healthy" or "running"
+
+# 5. Monitor via Flower UI
+open http://localhost:5555
+```
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| **Redis** | | |
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection URL |
+| **Proxy** | | |
+| `PROXY_LIST_PATH` | `proxyscrape_premium_http_proxies.txt` | Proxy file path |
+| `PROXY_LIST` | (empty) | Comma-separated proxy list (alternative to file) |
+| `PROXY_ENABLED` | `true` | Enable/disable proxies |
+| `PROXY_HEALTH_CHECK` | `true` | Run periodic proxy health checks |
+| `PROXY_HEALTH_CHECK_INTERVAL` | `3600` | Health check interval (seconds) |
+| `PROXY_FALLBACK_DIRECT` | `true` | Allow direct connection when proxies fail |
+| `PROXY_COOLDOWN_SECONDS` | `300` | Cooldown after proxy failure |
+| `PROXY_MAX_CONSECUTIVE_FAILURES` | `3` | Max failures before permanent disable |
+| `MAX_PROXY_ATTEMPTS_PER_URL` | `3` | Proxy attempts per URL |
+| **Concurrency** | | |
+| `MAX_CONCURRENT_BROWSERS` | `5` | Max browser contexts per worker |
+| `CSV_PROCESSING_CONCURRENCY` | `3` | Parallel company scrapes per CSV |
+| `REQUEST_DELAY_MIN` | `1.5` | Min delay between requests (seconds) |
+| `REQUEST_DELAY_MAX` | `4.0` | Max delay between requests (seconds) |
+| **Timeouts** | | |
+| `PAGE_LOAD_TIMEOUT` | `30` | Page load timeout (seconds) |
+| `SELECTOR_WAIT_TIMEOUT` | `20` | Selector wait timeout (seconds) |
+| `NAVIGATION_TIMEOUT` | `30` | Navigation timeout (seconds) |
+| **Retry** | | |
+| `MAX_RETRIES` | `3` | Max retry attempts |
+| `RETRY_BASE_DELAY` | `2.0` | Base delay for exponential backoff |
+| `RETRY_MAX_DELAY` | `60.0` | Max retry delay |
+| **Priority CSV** | | |
+| `PRIORITY_CSV_FILES` | `delhi` | Comma-separated priority CSV files |
+| `PRIORITY_FALLBACK_THRESHOLD` | `5` | Consecutive failures before fallback |
+| `PRIORITY_RECHECK_INTERVAL` | `60` | Re-check priority file interval (seconds) |
+| **Output & Logging** | | |
+| `OUTPUT_DIR` | `./data` | Output directory |
+| `LOG_LEVEL` | `INFO` | Log level (DEBUG/INFO/WARNING/ERROR) |
+| `LOG_FORMAT` | `json` | Log format (json/text) |
+| **Checkpointing** | | |
+| `CHECKPOINT_DIR` | `./data/checkpoints` | Checkpoint directory |
+| `CHECKPOINT_INTERVAL` | `100` | Save checkpoint every N records |
+| **Shutdown** | | |
+| `SHUTDOWN_TIMEOUT` | `30` | Max seconds to wait for in-flight ops |
+
+## Project Structure
 
 ```
 web_scraper_system/
-├── config/
-│   ├── settings.py       # env-driven settings (pydantic)
-│   └── targets.yaml      # one entry per site - selectors, pagination
+├── companydata/              # Input CSV files (read-only in container)
+│   ├── delhi.csv
+│   ├── ROC-assam.csv
+│   └── ...
+├── data/                     # Persistent output (mounted volume)
+│   ├── json/                 # JSONL output per CSV
+│   ├── csv/                  # Consolidated CSV output
+│   └── checkpoints/          # Checkpoint files for resume
+├── logs/                     # Log files (mounted volume)
 ├── scraper/
-│   ├── browser.py         # Playwright browser + stealth context factory
-│   ├── proxy_manager.py   # rotation, cooldown, provider-API support
-│   ├── fetcher.py         # navigate + retry + block detection
-│   ├── parser.py          # generic CSS-selector extractor
-│   ├── pipeline.py        # JSONL write + Redis dedup + CSV rollup
-│   ├── queue_manager.py   # Celery app + beat schedule (the "cronjob")
-│   └── tasks.py           # the actual Celery task definitions
-├── workers/celery_worker.py
+│   ├── browser.py           # Browser management with graceful shutdown
+│   ├── checkpoint.py        # Checkpoint/resume system
+│   ├── csv_processor.py     # Priority CSV processor
+│   ├── fetcher.py           # Page fetching with proxy retry
+│   ├── parser.py            # HTML parsing (tofler.in extractors)
+│   ├── pipeline.py          # Data pipeline with atomic writes
+│   ├── proxy_manager.py     # Proxy pool with health checks
+│   ├── tasks.py             # Celery tasks
+│   ├── queue_manager.py     # Celery configuration
+│   ├── exceptions.py        # Custom exceptions
+│   └── utils/
+│       ├── logger.py        # Structured JSON logging
+│       └── user_agents.py   # Random user agent rotation
+├── config/
+│   ├── settings.py          # Pydantic settings from env
+│   └── targets.yaml         # Target site configuration
 ├── scripts/
-│   ├── run_once.py        # local test run, no Celery/Redis needed
-│   └── crontab.txt        # bare-VM alternative to Celery Beat
-├── data/{json,csv}/       # output lands here
-├── Dockerfile
-├── docker-compose.yml     # redis + worker(s) + beat + flower dashboard
-└── .env.example
+│   ├── process_companydata.py  # Direct CSV processor entry
+│   └── run_once.py              # Legacy single-target runner
+├── workers/
+│   └── celery_worker.py     # Celery app entry point
+├── Dockerfile               # Multi-stage production build
+├── docker-compose.yml       # Production services
+├── docker-compose.override.yml  # Development overrides
+├── start.sh                 # Production startup script
+├── requirements.txt         # Python dependencies
+└── .env.example             # Environment template
 ```
 
-## Setup
+## Running the Scraper
+
+### Using Start Script (Recommended)
 
 ```bash
-cp .env.example .env          # fill in your proxy provider + credentials
-docker compose up --build -d  # redis, 3 workers, beat scheduler, flower
+# Make executable
+chmod +x start.sh
+
+# Start all services (worker + beat + flower)
+./start.sh all
+
+# Run CSV processor once (direct, no Celery)
+./start.sh csv-once
+
+# Run CSV processor continuously
+./start.sh csv
+
+# Check status
+./start.sh status             # Checkpoint progress
+./start.sh health             # Health check
+
+# View logs
+./start.sh logs               # All services
+./start.sh logs worker        # Worker only
+
+# Stop/Restart
+./start.sh stop
+./start.sh restart
 ```
 
-Flower (task monitoring dashboard) is then at `http://<host>:5555`.
+### Using Docker Compose Directly
 
-To test a single target locally before trusting it to the scheduler:
 ```bash
-pip install -r requirements.txt
-playwright install --with-deps chromium
-python scripts/run_once.py example_site
+# Start all services in background
+docker-compose up -d
+
+# View logs
+docker-compose logs -f worker
+
+# Run one-off CSV processing
+docker-compose run --rm worker python scripts/process_companydata.py
+
+# Run Celery task manually
+docker-compose run --rm worker python -c "
+from scraper.tasks import process_company_csv
+result = process_company_csv.delay()
+print(f'Task ID: {result.id}')
+"
+
+# Check task status
+docker-compose run --rm worker python -c "
+from scraper.tasks import process_company_csv
+result = process_company_csv.AsyncResult('task-id-here')
+print(result.status, result.result)
+"
 ```
 
-## Adding a target site
+### Using Celery Commands
 
-Add an entry to `config/targets.yaml` with the listing container selector
-and field selectors — no code changes needed. Pagination's `next_selector`
-resolution is left as a marked TODO in `scraper/tasks.py::_scrape_target`
-since how "next page" works (query param vs. link vs. infinite scroll)
-differs per site.
+```bash
+# Start worker
+celery -A workers.celery_worker worker --loglevel=info --concurrency=5
 
-## How 24x7 works
+# Start beat scheduler
+celery -A workers.celery_worker beat --loglevel=info
 
-`queue_manager.py` sets a **Celery Beat** schedule that fires `run_full_crawl`
-every hour from inside the container itself — this is the "cronjob," but it
-lives in your app instead of the host OS, so it behaves identically whether
-you deploy on a bare EC2 box, ECS/Fargate, or Kubernetes. `scripts/crontab.txt`
-is included as a plain-system-cron alternative if you'd rather run this on a
-single VM without Docker.
+# Start Flower monitoring
+celery -A workers.celery_worker flower --port=5555
 
-`task_acks_late=True` + `max_retries=2` mean a task is only marked done after
-it succeeds, and a worker crashing mid-scrape gets its task re-queued instead
-of losing that batch.
+# Trigger full crawl
+celery -A workers.celery_worker call scraper.tasks.run_full_crawl
 
-## Rotating IPs
+# Process CSVs
+celery -A workers.celery_worker call scraper.tasks.process_company_csv
+```
 
-`ProxyManager` supports either a static comma-separated proxy list you
-manage yourself, or a rotating-proxy provider (Bright Data, Oxylabs,
-Smartproxy, IPRoyal are the common ones) that hands out a new IP per
-request — the latter is what you want for heavy sustained volume, since you
-don't have to source/replace IPs yourself. A proxy that trips a block gets
-cooled down for 5 minutes rather than removed permanently.
+## Monitoring & Operations
 
-## Bot-detection handling
+### Flower UI (Port 5555)
 
-What's implemented: stealth patches (`playwright-stealth`), rotating
-user-agent + viewport + proxy per context, randomized human-like delays and
-scroll behaviour, and automatic retry-on-new-IP when a block/interstitial
-page is detected. This covers most fingerprint- and reputation-based bot
-detection.
+- Task status and history
+- Worker status and stats
+- Task retry/termination
+- Real-time monitoring
 
-What needs a plug-in: sites that gate content behind an **interactive
-CAPTCHA challenge** (reCAPTCHA/hCaptcha image puzzles) need a solving
-service wired in — 2Captcha, Anti-Captcha, and CapMonster all expose a
-similar submit-the-challenge-token / poll-for-solution API. The integration
-point is marked with a comment in `scraper/fetcher.py`. `.env.example` has
-placeholder config for this.
+### Key Metrics to Monitor
 
-## Scaling for heavier workload
+```bash
+# Checkpoint status
+./start.sh status
 
-- Bump `docker-compose.yml`'s `worker` `replicas` and/or `--concurrency`
-- Split `config/targets.yaml` across multiple Beat schedules if some sites
-  need to run more/less often than others
-- Swap the Redis dedup set for a Postgres table if you need to query scraped
-  history, not just avoid duplicates
+# Proxy statistics
+docker-compose run --rm worker python -c "
+from scraper.tasks import proxy_stats
+import json
+print(json.dumps(proxy_stats.delay().get(timeout=30), indent=2))
+"
 
-## Cloud deployment options
+# Health check
+./start.sh health
+```
 
-- **AWS EC2**: install Docker, `docker compose up -d`, done — simplest.
-- **AWS ECS/Fargate**: push the built image to ECR, define one task per
-  service in `docker-compose.yml` (redis can also be ElastiCache instead).
-- **GCP**: Cloud Run for the workers won't work well (needs long-running
-  browser processes) — use Compute Engine or GKE instead, with Memorystore
-  for Redis.
+### Logs
 
-## A note on compliance
+Structured JSON logs (when `LOG_FORMAT=json`):
+```json
+{
+  "timestamp": "2026-08-18T10:30:00.123456+05:30",
+  "level": "INFO",
+  "logger": "scraper.csv_processor",
+  "module": "csv_processor",
+  "function": "_process_next_row",
+  "line": 280,
+  "message": "[delhi] Scraping: COMPANY NAME (U12345DL2020PTC123456) -> https://...",
+  "company": "COMPANY NAME",
+  "cin": "U12345DL2020PTC123456",
+  "url": "https://www.tofler.in/...",
+  "csv": "delhi"
+}
+```
 
-Check the target site's terms of service and `robots.txt`, keep request
-rates reasonable, and avoid scraping personal/sensitive data — this varies
-by jurisdiction and by site, so it's worth a quick legal check for anything
-you're running at real scale.
+### Data Persistence
+
+All data persists across container restarts via Docker volumes:
+
+| Data | Location | Description |
+|------|----------|-------------|
+| Scraped JSONL | `./data/json/{csv_name}.jsonl` | One file per input CSV |
+| Consolidated CSV | `./data/csv/{csv_name}.csv` | Merged output |
+| Checkpoints | `./data/checkpoints/global_checkpoint.json` | Resume position per CSV |
+| Logs | `./logs/scraper_YYYY-MM-DD.log` | Daily rotation, 14-day retention |
+
+## Resume After Crash/Restart
+
+The system automatically resumes from the last successful checkpoint:
+
+1. **On startup**, reads checkpoint file
+2. **For each CSV**, continues from `current_row_index`
+3. **Skips already-processed** companies via deduplication (Redis or local file)
+
+```bash
+# Manual checkpoint reset (fresh start)
+docker-compose run --rm worker python -c "
+from scraper.checkpoint import checkpoint_manager
+checkpoint_manager.clear_completed()
+print('Checkpoint cleared')
+"
+
+# View current checkpoint
+./start.sh status
+```
+
+## Graceful Shutdown
+
+The scraper handles SIGTERM/SIGINT gracefully:
+
+1. Receives shutdown signal
+2. Stops accepting new rows
+3. Finishes current in-flight scrape (up to `SHUTDOWN_TIMEOUT` seconds)
+4. Saves final checkpoint
+5. Closes browser contexts
+6. Exits cleanly
+
+```bash
+# Graceful stop
+./start.sh stop
+
+# Or via Docker
+docker-compose stop worker
+```
+
+## Proxy Management
+
+Proxies are loaded from:
+1. `PROXY_LIST_PATH` file (one per line: `user:pass@host:port`)
+2. `PROXY_LIST` environment variable (comma-separated)
+
+Features:
+- Automatic rotation with shuffling
+- Per-proxy failure categorization (connectivity, timeout, HTTP error, anti-bot)
+- Cooldown period after failures
+- Periodic health checks against httpbin.org
+- Permanent disable after `PROXY_MAX_CONSECUTIVE_FAILURES`
+- Direct connection fallback when all proxies cooling down
+
+## Adding New Target Sites
+
+1. Add entry to `config/targets.yaml`:
+```yaml
+targets:
+  - name: mysite
+    base_url: "https://example.com"
+    start_urls:
+      - "https://example.com/list"
+    list_item_selector: ".item"
+    fields:
+      name: "h2 a"
+      link: "h2 a::attr(href)"
+    company_wait_for_selector: "#detail"
+    company_fields:
+      name: "COMPANY_NAME"
+      # ... use special keys or CSS selectors
+```
+
+2. Add extractors in `scraper/parser.py` if needed (for special keys)
+
+3. Run with: `celery -A workers.celery_worker call scraper.tasks.scrape_single_target '["mysite"]'`
+
+## Troubleshooting
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| Redis connection failed | Check `REDIS_URL` in .env, ensure Redis is healthy |
+| No proxies working | Check proxy file format, try `PROXY_FALLBACK_DIRECT=true` |
+| Selector timeout | Increase `SELECTOR_WAIT_TIMEOUT`, check target site changes |
+| Browser crashes | Reduce `MAX_CONCURRENT_BROWSERS`, check memory limits |
+| CSV not found | Ensure `companydata/` is mounted, check file permissions |
+
+### Debug Mode
+
+```bash
+# Enable debug logging
+LOG_LEVEL=DEBUG ./start.sh csv-once
+
+# Run with single concurrency
+CSV_PROCESSING_CONCURRENCY=1 MAX_CONCURRENT_BROWSERS=1 ./start.sh csv-once
+```
+
+## Performance Tuning
+
+| Setting | Recommendation |
+|---------|----------------|
+| `MAX_CONCURRENT_BROWSERS` | 3-5 per CPU core (memory intensive) |
+| `CSV_PROCESSING_CONCURRENCY` | 2-4 (depends on proxy pool size) |
+| `REQUEST_DELAY_MIN/MAX` | 1-5s (respect target site rate limits) |
+| `CHECKPOINT_INTERVAL` | 50-200 (balance between I/O and resume granularity) |
+
+## Security Notes
+
+- Never commit `.env` or proxy files with credentials
+- Run containers as non-root user (configured in Dockerfile)
+- Use Docker secrets for sensitive values in production
+- Rotate proxy credentials regularly
+- Monitor for unusual traffic patterns
+
+## License
+
+Internal use only.

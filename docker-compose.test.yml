@@ -1,0 +1,53 @@
+# Test Docker Compose - Limits to 10 companies for quick testing
+# =============================================================================
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.test.yml up --build
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_test_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  worker:
+    build:
+      context: .
+      target: production
+    restart: "no"  # Don't restart for test runs
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - TEST_LIMIT=10  # Limit to 10 companies for testing
+      - LOG_LEVEL=DEBUG
+      - CSV_PROCESSING_CONCURRENCY=1
+      - MAX_CONCURRENT_BROWSERS=1
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./companydata:/app/companydata:ro
+      - ./proxyscrape_premium_http_proxies.txt:/app/proxyscrape_premium_http_proxies.txt:ro
+    command: python -m scraper.csv_processor
+
+volumes:
+  redis_test_data:
+    driver: local
+  data:
+    driver: local
+  logs:
+    driver: local
+
+networks:
+  default:
+    name: scraper-test-network

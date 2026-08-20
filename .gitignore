@@ -1,0 +1,34 @@
+# --- Secrets / credentials (NEVER commit) ---
+.env
+.env.local
+# Premium proxy list contains user:pass credentials — keep out of git.
+proxyscrape_premium_http_proxies.txt
+
+# --- Python bytecode / caches ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# --- OS cruft ---
+.DS_Store
+
+# --- Celery / runtime state ---
+celerybeat-schedule
+celerybeat-schedule.db
+
+# --- Archives ---
+*.zip
+
+# --- Large input data (kept on the box / S3, not in git) ---
+companydata/*.csv
+
+# --- Generated output / logs / checkpoints ---
+data/json/
+data/csv/
+data/failed/
+data/output/
+data/checkpoints/
+data/.DS_Store
+logs/
+*.log

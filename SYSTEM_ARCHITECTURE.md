@@ -855,7 +855,7 @@ CMD ["celery", "-A", "workers.celery_worker", "worker", "--loglevel=info"]
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `REDIS_URL` | Redis connection string | `redis://redis:6379/0` |
+| `REDIS_URL` | Redis connection string | `redis://localhost:6379/0` |
 | `PROXY_LIST` | Comma-separated static proxies | `http://user:pass@host:port,...` |
 | `PROXY_PROVIDER_API_URL` | Rotating proxy provider endpoint | `https://api.proxyscrape.com` |
 | `PROXY_PROVIDER_API_KEY` | Provider API authentication | `sk-xxxxx` |

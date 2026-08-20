@@ -1,0 +1,34 @@
+# Adds the long-running CSV backfill as its own service, so the multi-day
+# Delhi->Goa scrape runs as a plain resilient process (NOT a Celery task, which
+# would hit Redis's visibility-timeout redelivery on long tasks).
+#
+# Run with:
+#   docker compose -f docker-compose.yml -f docker-compose.scraper.yml up -d --build
+services:
+  csv-processor:
+    build:
+      context: .
+      target: production
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./companydata:/app/companydata:ro
+      - ./proxyscrape_premium_http_proxies.txt:/app/proxyscrape_premium_http_proxies.txt:ro
+      - ./free-proxy-list.txt:/app/free-proxy-list.txt:ro
+    command: ["python", "-m", "scraper.csv_processor"]
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2'
+        reservations:
+          memory: 1G

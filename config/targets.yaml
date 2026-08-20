@@ -7,32 +7,33 @@
 targets:
   - name: tofler
     base_url: "https://www.tofler.in"
-    start_urls:
-      - "https://www.tofler.in/companylist/delhi/"
-    list_item_selector: "table tr:has(td)"
-    fields:
-      company_name: "td:nth-child(1) a"
-      company_link: "td:nth-child(1) a::attr(href)"
-      incorporation_year: "td:nth-child(2)"
-      industry: "td:nth-child(3)"
-      status: "td:nth-child(4)"
-    company_wait_for_selector: "#registered-details-module"
+    start_urls: []
+    list_item_selector: ""
+    fields: {}
+    company_wait_for_selector: "body"
     company_fields:
-      company_name: "#overview-module h1"
-      cin: "#registered-details-module .registered_box_wrapper .flex-col.gap-2:nth-child(1) span.text-base.text-dark.font-semibold"
-      status: "#overview-module .circular_point + .success"
+      company_name: "COMPANY_NAME"
+      cin: "CIN"
+      status: "STATUS"
       registered_address: "REGISTERED_ADDRESS"
-      authorized_capital: "#registered-details-module .registered_box_wrapper .flex-col.gap-2:nth-child(5) span.text-base.text-dark.font-semibold"
-      paid_up_capital: "#registered-details-module .registered_box_wrapper .flex-col.gap-2:nth-child(4) span.text-base.text-dark.font-semibold"
-      industry: ".company_tag_item"
-      email: "#registered-details-module .registered_box_wrapper .flex-col.gap-2:nth-child(3) span.text-base.text-dark.font-semibold"
+      authorized_capital: "AUTHORIZED_CAPITAL"
+      paid_up_capital: "PAID_UP_CAPITAL"
+      industry: "INDUSTRY"
+      email: "EMAIL"
       directors: "DIRECTORS_TABLE"
-    pagination:
-      type: "url_pattern"
-      url_pattern: "{base_url}/companylist/delhi/pg-{page}"
-      max_pages: 3
-    wait_for_selector: "table tr:has(td)"
-    rate_limit_seconds: 3
+      date_of_incorporation: "DATE_OF_INCORPORATION"
+      company_class: "COMPANY_CLASS"
+      company_category: "COMPANY_CATEGORY"
+      company_sub_category: "COMPANY_SUB_CATEGORY"
+      roc: "ROC"
+      listing_status: "LISTING_STATUS"
+      registered_office_address: "REGISTERED_OFFICE_ADDRESS"
+      nic_code: "NIC_CODE"
+      nic_description: "NIC_DESCRIPTION"
+      last_agm_date: "LAST_AGM_DATE"
+      last_balance_sheet_date: "LAST_BALANCE_SHEET_DATE"
+    wait_for_selector: ""
+    rate_limit_seconds: 2
 
   # - name: another_site
   #   start_urls:

@@ -21,12 +21,19 @@ celery_app.conf.update(
 # "24x7" doesn't depend on the host machine having a system cron —
 # this keeps working identically on Docker, ECS, Kubernetes, bare EC2, etc.
 celery_app.conf.beat_schedule = {
-    "run-full-crawl-hourly": {
-        "task": "scraper.tasks.run_full_crawl",
-        "schedule": crontab(minute=0),          # every hour, on the hour
-    },
+    # Legacy listing-page crawl is DISABLED — we scrape from the CSVs
+    # (csv-processor service), so this must not compete for browsers/proxies.
+    # "run-full-crawl-hourly": {
+    #     "task": "scraper.tasks.run_full_crawl",
+    #     "schedule": crontab(minute=0),          # every hour, on the hour
+    # },
     "consolidate-csv-daily": {
         "task": "scraper.tasks.consolidate_all",
         "schedule": crontab(hour=23, minute=55),
+    },
+    # Continuously back up scraped output to S3 while the crawl runs.
+    "sync-to-s3": {
+        "task": "scraper.tasks.sync_to_s3",
+        "schedule": max(60, settings.s3_sync_interval_minutes * 60),
     },
 }

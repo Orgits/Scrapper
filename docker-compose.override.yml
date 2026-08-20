@@ -1,0 +1,44 @@
+# Development Docker Compose Override
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.override.yml up
+# =============================================================================
+
+services:
+  worker:
+    build:
+      context: .
+      target: development
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./companydata:/app/companydata:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - LOG_LEVEL=DEBUG
+    command: celery -A workers.celery_worker worker --loglevel=info --concurrency=2
+
+  beat:
+    build:
+      context: .
+      target: development
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./companydata:/app/companydata:ro
+    command: celery -A workers.celery_worker beat --loglevel=info
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+
+  flower:
+    build:
+      context: .
+      target: development
+    volumes:
+      - .:/app
+    command: celery -A workers.celery_worker flower --port=5555
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
